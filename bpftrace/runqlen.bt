@@ -1,0 +1,30 @@
+#!/usr/bin/env bpftrace
+#include <linux/sched.h>
+
+/*
+ * print runqlen per sec
+ * bpftrace ver of bcc/tools/runqlen
+*/
+
+struct cfs_rq
+{
+    char         padding1[24];
+    unsigned int nr_running;
+};
+
+profile:hz:99
+{
+    $cfs_rq = curtask->se.cfs_rq;
+    $task_nr = $cfs_rq->nr_running;
+    if ($task_nr > 0)
+    {
+        $task_nr--;
+    }
+    @[cpu] = $task_nr;
+}
+
+interval:s:1
+{
+    printf("@[%s]: %s\n", "CPU", "RQ_LEN");
+    print(@);
+}
