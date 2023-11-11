@@ -1,6 +1,5 @@
 #!/usr/bin/env bpftrace
 #include <linux/sched.h>
-
 /*
  * print runqlen per sec
  * bpftrace ver of bcc/tools/runqlen

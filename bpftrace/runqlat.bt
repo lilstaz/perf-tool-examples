@@ -1,0 +1,54 @@
+#!/usr/bin/env bpftrace
+#include <linux/sched.h>
+/*
+ * trace latency of specified pid
+ * bpftrace ver of bcc/tools/runqlat
+*/
+
+BEGIN
+{
+    if (!$1) 
+    {
+        printf("Specify the pid of the task first\n");
+        exit();
+    }
+    @pid = $1;
+    printf("Tracing latency of task %d. Hit Ctrl-C to end.\n", @pid);
+}
+
+// record the queue time
+rt:sched_wakeup,
+rt:sched_wakeup_new
+{
+    $wakee = (struct task_struct*)arg0;
+    if ($wakee->tgid == @pid)
+    {
+        @qt[$wakee->pid] = nsecs;
+    }
+}
+
+rt:sched_switch
+{
+    $prev = (struct task_struct*)arg1;
+    $next = (struct task_struct*)arg2;
+
+    if ($prev->tgid == 0 || $next->tgid == 0)
+    {
+        return;
+    }
+
+    // update the queue time
+    if ($prev->tgid == @pid && $prev->state == TASK_RUNNING)
+    {
+        @qt[$prev->pid] = nsecs;
+    }
+
+    // cal the latency
+    if ($next->tgid == @pid && @qt[$next->pid])
+    {
+        @[$next->pid] = hist((nsecs - @qt[$next->pid]) / 1000);
+        delete(@qt[$next->pid]);
+    }
+}
+
+END {clear(@qt); delete(@pid)}
